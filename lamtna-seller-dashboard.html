@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>لمتنا | لوحة البائع</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f5;font-family:Arial,Tahoma,sans-serif;color:#171717}
+.wrap{max-width:900px;margin:auto;padding:16px}
+.head{background:#111;color:#fff;padding:22px;border-radius:20px;margin-bottom:14px}
+h1,h2,h3{margin-top:0}.head p{color:#ddd;margin:7px 0 0}
+.tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}
+.tab{white-space:nowrap;border:0;background:#ddd;color:#111;padding:11px 15px;border-radius:12px;font-weight:800;cursor:pointer}
+.tab.active{background:#111;color:#fff}
+.card{background:#fff;border:1px solid #e7e7e7;border-radius:18px;padding:16px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:#f7f7f7;border-radius:14px;padding:14px}.stat b{display:block;font-size:24px;margin-top:6px}
+label{display:block;font-weight:800;margin:12px 0 6px}
+input,textarea,select{width:100%;padding:12px;border:1px solid #ddd;border-radius:11px;font-size:16px}
+textarea{min-height:90px}
+button{border:0;border-radius:11px;padding:12px 15px;font-size:15px;font-weight:800;cursor:pointer}
+.primary{background:#111;color:#fff}.green{background:#25D366;color:#fff}.danger{background:#ffe9e9;color:#a40000}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.item{border:1px solid #e5e5e5;border-radius:15px;padding:14px;margin-top:10px}
+.muted{color:#777;line-height:1.6}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#eee;font-size:13px;font-weight:800}
+.progress{height:9px;background:#eee;border-radius:99px;overflow:hidden;margin:9px 0}
+.progress i{display:block;height:100%;background:#111}
+.msg{padding:12px;border-radius:11px;margin-top:10px;display:none;line-height:1.6}
+.ok{background:#eaf8ee;color:#17652d}.err{background:#fff0f0;color:#9d2222}
+.preview{width:100%;max-height:250px;object-fit:cover;border-radius:12px;display:none;margin-top:10px}
+.hidden{display:none!important}
+@media(max-width:650px){.grid,.stats{grid-template-columns:1fr 1fr}.wrap{padding:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>لمتنا — لوحة البائع 🛍️</h1>
+    <p>إدارة العروض والتجمعات والطلبات من مكان واحد.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="dashboard">الرئيسية</button>
+    <button class="tab" data-tab="products">المنتجات</button>
+    <button class="tab" data-tab="groups">التجمعات</button>
+    <button class="tab" data-tab="orders">الطلبات</button>
+    <button class="tab" data-tab="add">إضافة عرض</button>
+  </div>
+
+  <section id="dashboard" class="section">
+    <div class="stats">
+      <div class="stat">المنتجات<b id="sProducts">0</b></div>
+      <div class="stat">التجمعات<b id="sGroups">0</b></div>
+      <div class="stat">المكتملة<b id="sCompleted">0</b></div>
+      <div class="stat">الطلبات<b id="sOrders">0</b></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="row"><h2>آخر التجمعات</h2><button class="primary" onclick="loadAll()">تحديث</button></div>
+      <div id="dashGroups"><div class="muted">جاري التحميل...</div></div>
+    </div>
+  </section>
+
+  <section id="products" class="section hidden">
+    <div class="card">
+      <div class="row"><h2>منتجاتي</h2><button class="primary" onclick="showTab('add')">+ إضافة عرض</button></div>
+      <div id="productsList"></div>
+    </div>
+  </section>
+
+  <section id="groups" class="section hidden">
+    <div class="card">
+      <div class="row"><h2>التجمعات</h2><button class="primary" onclick="loadAll()">تحديث</button></div>
+      <div id="groupsList"></div>
+    </div>
+  </section>
+
+  <section id="orders" class="section hidden">
+    <div class="card">
+      <div class="row"><h2>الطلبات</h2><button class="primary" onclick="loadAll()">تحديث</button></div>
+      <div id="ordersList"></div>
+    </div>
+  </section>
+
+  <section id="add" class="section hidden">
+    <div class="card">
+      <h2>إضافة عرض جديد</h2>
+      <label>اسم المنتج</label><input id="name" placeholder="مثال: ملابس أطفال">
+      <label>وصف مختصر</label><textarea id="description" placeholder="وصف المنتج"></textarea>
+      <label>رابط صورة المنتج</label><input id="image" placeholder="https://..." oninput="previewImage()">
+      <img id="preview" class="preview">
+      <div class="grid">
+        <div><label>السعر العادي</label><input id="normal" type="number" min="0" step="0.01"></div>
+        <div><label>سعر التجمع</label><input id="group" type="number" min="0" step="0.01"></div>
+      </div>
+      <label>عدد الأشخاص المطلوب</label><input id="required" type="number" min="2" value="5">
+      <label>رقم واتساب التاجر</label><input id="sellerWhatsapp" type="tel" placeholder="079XXXXXXX أو 9627XXXXXXX">
+      <button id="publish" class="primary" style="width:100%;margin-top:15px" onclick="publishProduct()">نشر العرض</button>
+      <div id="message" class="msg"></div>
+      <div id="newLink" class="card hidden" style="margin-top:12px;background:#fafafa">
+        <b>رابط المنتج</b><div id="productLink" class="muted" style="word-break:break-all;margin:8px 0"></div>
+        <button class="primary" onclick="copyLink()">نسخ الرابط</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const SUPABASE_URL="https://sufrioumvpsgmnbvccou.supabase.co";
+const SUPABASE_KEY="sb_publishable_UjrdEmpkrgsd_tV30Cd0UA_CkR4FBoY";
+const SELLER_ID="f6072a42-ebdf-4b62-990d-a961054b5be4";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let lastLink="";
+
+function showTab(id){
+  document.querySelectorAll(".section").forEach(x=>x.classList.add("hidden"));
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.getElementById(id).classList.remove("hidden");
+  document.querySelector(`[data-tab="${id}"]`).classList.add("active");
+}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+
+function msg(t,ok){
+  const m=document.getElementById("message");
+  m.textContent=t;m.className="msg "+(ok?"ok":"err");m.style.display="block";
+}
+function previewImage(){
+  const u=document.getElementById("image").value.trim(),img=document.getElementById("preview");
+  img.src=u;img.style.display=u?"block":"none";
+}
+function normPhone(raw){
+  let p=String(raw||"").replace(/\D/g,"");
+  if(p.startsWith("00"))p=p.slice(2);
+  if(p.startsWith("0"))p="962"+p.slice(1);
+  return p;
+}
+function esc(s){
+  return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+}
+
+async function publishProduct(){
+  const btn=document.getElementById("publish");
+  const name=document.getElementById("name").value.trim();
+  const description=document.getElementById("description").value.trim();
+  const image_url=document.getElementById("image").value.trim()||null;
+  const normal=Number(document.getElementById("normal").value);
+  const group=Number(document.getElementById("group").value);
+  const required=Number(document.getElementById("required").value);
+  const phone=normPhone(document.getElementById("sellerWhatsapp").value);
+
+  if(!name||!Number.isFinite(normal)||!Number.isFinite(group)||!Number.isInteger(required)||required<2){
+    msg("تأكد من اسم المنتج والأسعار وعدد الأشخاص.",false);return;
+  }
+  if(group>normal){msg("سعر التجمع يجب أن يكون أقل أو مساويًا للسعر العادي.",false);return}
+  if(!/^9627\d{8}$/.test(phone)){msg("أدخل رقم واتساب أردني صحيح مثل 079XXXXXXX.",false);return}
+
+  btn.disabled=true;btn.textContent="جاري النشر...";
+  const {error:pe}=await db.rpc("set_test_seller_whatsapp",{p_phone:phone});
+  if(pe){msg("تعذر حفظ رقم واتساب: "+pe.message,false);btn.disabled=false;btn.textContent="نشر العرض";return}
+
+  const {data,error}=await db.from("products").insert({
+    seller_id:SELLER_ID,name,description,image_url,normal_price:normal,
+    group_price:group,required_members:required,status:"active"
+  }).select("id").single();
+  if(error){msg("تعذر نشر العرض: "+error.message,false);btn.disabled=false;btn.textContent="نشر العرض";return}
+
+  const {error:ge}=await db.from("groups").insert({
+    product_id:data.id,required_members:required,current_members:0,status:"open"
+  });
+  if(ge){msg("تم المنتج لكن تعذر إنشاء التجمع: "+ge.message,false);btn.disabled=false;btn.textContent="نشر العرض";return}
+
+  lastLink=location.origin+location.pathname.replace(/[^/]*$/,"")+"index.html?product="+data.id;
+  document.getElementById("productLink").textContent=lastLink;
+  document.getElementById("newLink").classList.remove("hidden");
+  msg("تم نشر العرض بنجاح 🎉",true);
+  btn.textContent="تم النشر ✓";
+  await loadAll();
+}
+
+async function loadAll(){
+  const {data:products,error:pe}=await db.from("products")
+    .select("id,name,description,normal_price,group_price,required_members,status,created_at")
+    .eq("seller_id",SELLER_ID).order("created_at",{ascending:false});
+  if(pe){renderError(pe);return}
+
+  const ids=(products||[]).map(x=>x.id);
+  let groups=[],orders=[];
+  if(ids.length){
+    const gr=await db.rpc("seller_dashboard_groups",{p_seller_id:SELLER_ID});
+    if(!gr.error) groups=gr.data||[];
+    const or=await db.rpc("seller_dashboard_orders",{p_seller_id:SELLER_ID});
+    if(!or.error) orders=or.data||[];
+  }
+
+  document.getElementById("sProducts").textContent=products.length;
+  document.getElementById("sGroups").textContent=groups.length;
+  document.getElementById("sCompleted").textContent=groups.filter(x=>x.status==="completed").length;
+  document.getElementById("sOrders").textContent=orders.length;
+
+  document.getElementById("productsList").innerHTML=products.length?products.map(p=>`
+    <div class="item">
+      <div class="row"><b>${esc(p.name)}</b><span class="badge">${esc(p.status)}</span></div>
+      <div class="muted">العادي: ${p.normal_price} د.أ — التجمع: ${p.group_price} د.أ — المطلوب: ${p.required_members}</div>
+      <div style="margin-top:9px"><a href="index.html?product=${p.id}" target="_blank">فتح صفحة المنتج</a></div>
+    </div>`).join(""):"<div class='muted'>لا يوجد منتجات بعد.</div>";
+
+  const groupHtml=groups.length?groups.map(g=>{
+    const pct=Math.min(100,Math.round((Number(g.current_members||0)/Number(g.required_members||1))*100));
+    return `<div class="item">
+      <div class="row"><b>${esc(g.product_name)}</b><span class="badge">${esc(g.status)}</span></div>
+      <div class="muted">المحافظة: ${esc(g.governorate||"غير محددة")}</div>
+      <div>${g.current_members} / ${g.required_members}</div>
+      <div class="progress"><i style="width:${pct}%"></i></div>
+    </div>`}).join(""):"<div class='muted'>لا يوجد تجمعات.</div>";
+  document.getElementById("groupsList").innerHTML=groupHtml;
+  document.getElementById("dashGroups").innerHTML=groups.slice(0,5).map(g=>`
+    <div class="item"><div class="row"><b>${esc(g.product_name)}</b><span>${g.current_members}/${g.required_members}</span></div>
+    <div class="muted">${esc(g.governorate||"غير محددة")} — ${esc(g.status)}</div></div>`).join("")||"<div class='muted'>لا يوجد تجمعات.</div>";
+
+  document.getElementById("ordersList").innerHTML=orders.length?orders.map(o=>{
+    let phone=String(o.customer_phone||"").replace(/\D/g,"");
+    const wa=phone?`<a href="https://wa.me/${phone}" target="_blank"><button class="green">واتساب</button></a>`:"";
+    return `<div class="item">
+      <div class="row"><b>${esc(o.product_name)}</b><span class="badge">${esc(o.status)}</span></div>
+      <div class="muted">العميل: ${esc(o.customer_name)} — ${esc(o.customer_phone)}</div>
+      <div class="muted">المحافظة: ${esc(o.governorate)} — المدينة: ${esc(o.city||"-")} — المنطقة: ${esc(o.area||"-")}</div>
+      <div class="muted">العنوان: ${esc(o.address||"-")}</div>
+      <div class="muted">الكمية: ${o.quantity} — الإجمالي: ${o.total_price} د.أ</div>
+      <div style="margin-top:9px">${wa}</div>
+    </div>`}).join(""):"<div class='muted'>لا توجد طلبات.</div>";
+}
+function renderError(e){
+  const t="تعذر تحميل لوحة التحكم: "+(e?.message||e);
+  document.getElementById("productsList").innerHTML="<div class='muted'>"+esc(t)+"</div>";
+}
+async function copyLink(){
+  try{await navigator.clipboard.writeText(lastLink);alert("تم نسخ الرابط")}catch(e){prompt("انسخ الرابط:",lastLink)}
+}
+loadAll();
+</script>
+</body>
+</html>
