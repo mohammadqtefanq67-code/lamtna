@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>لمتنا | التجمعات</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#f7f7f7;font-family:Arial,Tahoma,sans-serif;color:#171717}
+    .wrap{max-width:620px;margin:auto;padding:18px}
+    header{background:#111;color:#fff;border-radius:20px;padding:22px;margin-bottom:18px}
+    header h1{margin:0 0 7px;font-size:30px}
+    header p{margin:0;color:#ddd}
+    .card{background:#fff;border:1px solid #e7e7e7;border-radius:20px;padding:18px;margin-bottom:16px;box-shadow:0 5px 18px #00000008}
+    .product{overflow:hidden;padding:0}
+    .product img{width:100%;height:260px;object-fit:cover;background:#eee;display:block}
+    .product-body{padding:18px}
+    .name{font-size:23px;font-weight:800;margin-bottom:8px}
+    .desc{color:#666;line-height:1.7}
+    .prices{display:flex;gap:10px;align-items:center;margin:15px 0}
+    .group{font-size:26px;font-weight:800}
+    .normal{text-decoration:line-through;color:#999}
+    label{display:block;font-weight:700;margin:13px 0 7px}
+    input,select{width:100%;padding:13px;border:1px solid #ddd;border-radius:12px;font-size:16px;background:#fff}
+    button{width:100%;border:0;border-radius:13px;padding:15px;font-size:17px;font-weight:800;background:#111;color:#fff;margin-top:16px;cursor:pointer}
+    button:disabled{opacity:.55}
+    .progress{height:12px;background:#eee;border-radius:99px;overflow:hidden;margin:12px 0}
+    .bar{height:100%;background:#111;width:0}
+    .count{text-align:center;font-weight:800}
+    .msg{padding:13px;border-radius:12px;margin-top:12px;display:none;line-height:1.6}
+    .ok{background:#eaf8ee;color:#17652d}.err{background:#fff0f0;color:#9d2222}
+    .muted{color:#777;font-size:14px}
+    .hidden{display:none}
+    .loader{text-align:center;padding:25px;color:#666}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>لمتنا 🤝</h1>
+    <p>كل ما يكتمل التجمع، نوصل السعر الجماعي.</p>
+  </header>
+
+  <div id="loading" class="loader">جاري تحميل العروض...</div>
+  <div id="products"></div>
+
+  <div id="joinCard" class="card hidden">
+    <h2 id="joinTitle">الانضمام للتجمع</h2>
+    <div id="joinInfo" class="muted"></div>
+
+    <label>المحافظة</label>
+    <select id="governorate" onchange="loadGroupProgress()">
+      <option value="">اختر المحافظة</option>
+      <option>عمّان</option><option>إربد</option><option>الزرقاء</option>
+      <option>البلقاء</option><option>مادبا</option><option>جرش</option>
+      <option>عجلون</option><option>المفرق</option><option>الكرك</option>
+      <option>الطفيلة</option><option>معان</option><option>العقبة</option>
+    </select>
+
+    <div id="progressBox" class="hidden" style="margin-top:16px">
+      <div class="count" id="progressText">التجمع: 0 / 5</div>
+      <div class="progress"><div class="bar" id="progressBar"></div></div>
+      <div class="muted" id="progressHint" style="text-align:center"></div>
+    </div>
+
+    <label>الاسم</label>
+    <input id="name" placeholder="اسمك الكامل" maxlength="100">
+
+    <label>رقم الهاتف</label>
+    <input id="phone" inputmode="tel" placeholder="07xxxxxxxx" maxlength="20">
+
+    <label>المدينة (اختياري)</label>
+    <input id="city" placeholder="مثال: عمّان" maxlength="100">
+
+    <label>المنطقة (اختياري)</label>
+    <input id="area" placeholder="مثال: الجبيهة" maxlength="100">
+
+    <button id="joinBtn" onclick="joinGroup()">انضم للتجمع</button>
+    <div id="message" class="msg"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://sufrioumvpsgmnbvccou.supabase.co";
+const SUPABASE_KEY = "sb_publishable_UjrdEmpkrgsd_tV30Cd0UA_CkR4FBoY";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let selectedProduct = null;
+const requestedProductId = new URLSearchParams(location.search).get('product');
+
+function esc(v){
+  return String(v ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+async function loadProducts(){
+  const loading = document.getElementById("loading");
+  const box = document.getElementById("products");
+
+  if(requestedProductId){
+    const {data,error} = await db.from("products")
+      .select("id,name,description,image_url,normal_price,group_price,required_members")
+      .eq("id",requestedProductId).eq("status","active").single();
+    loading.classList.add("hidden");
+    if(error || !data){
+      box.innerHTML='<div class="card"><div class="msg err" style="display:block">العرض غير موجود أو لم يعد متاحاً.</div></div>';
+      return;
+    }
+    selectedProduct=data;
+    box.innerHTML=`<div class="card product">
+      ${data.image_url ? `<img src="${esc(data.image_url)}" alt="${esc(data.name)}">` : ""}
+      <div class="product-body">
+        <div class="name">${esc(data.name)}</div>
+        <div class="desc">${esc(data.description || "")}</div>
+        <div class="prices"><span class="group">${esc(data.group_price)} د.أ</span><span class="normal">${esc(data.normal_price)} د.أ</span></div>
+        <div class="muted">التجمع يحتاج ${esc(data.required_members)} أشخاص من نفس المحافظة</div>
+        <button onclick="openJoin()">اطلب الآن</button>
+      </div></div>`;
+    return;
+  }
+
+  const {data, error} = await db
+    .from("products")
+    .select("id,name,description,image_url,normal_price,group_price,required_members")
+    .eq("status","active")
+    .order("created_at",{ascending:false});
+
+  loading.classList.add("hidden");
+
+  if(error){
+    box.innerHTML = `<div class="card"><div class="msg err" style="display:block">تعذر تحميل العروض.<br>${esc(error.message)}</div></div>`;
+    return;
+  }
+
+  if(!data || !data.length){
+    box.innerHTML = `<div class="card"><h3>لا توجد عروض حالياً</h3><p class="muted">ارجع لاحقاً، رح تنزل عروض جديدة.</p></div>`;
+    return;
+  }
+
+  box.innerHTML = data.map(p => `
+    <div class="card product">
+      ${p.image_url ? `<img src="${esc(p.image_url)}" alt="${esc(p.name)}">` : ""}
+      <div class="product-body">
+        <div class="name">${esc(p.name)}</div>
+        <div class="desc">${esc(p.description || "")}</div>
+        <div class="prices">
+          <span class="group">${esc(p.group_price)} د.أ</span>
+          <span class="normal">${esc(p.normal_price)} د.أ</span>
+        </div>
+        <div class="muted">يكتمل التجمع عند ${esc(p.required_members)} أشخاص</div>
+        <button onclick='selectProduct(${JSON.stringify(p.id)})'>أريد الانضمام</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openJoin(){
+  if(!selectedProduct) return;
+  document.getElementById("joinTitle").textContent="الانضمام: "+selectedProduct.name;
+  document.getElementById("joinInfo").textContent=`السعر الجماعي ${selectedProduct.group_price} د.أ — التجمع يحتاج ${selectedProduct.required_members} أشخاص.`;
+  document.getElementById("joinCard").classList.remove("hidden");
+  document.getElementById("joinCard").scrollIntoView({behavior:"smooth"});
+}
+
+async function selectProduct(id){
+  const {data,error} = await db
+    .from("products")
+    .select("id,name,group_price,required_members")
+    .eq("id",id).single();
+
+  if(error){ alert("تعذر فتح العرض"); return; }
+
+  selectedProduct = data;
+  document.getElementById("joinTitle").textContent = "الانضمام: " + data.name;
+  document.getElementById("joinInfo").textContent =
+    `السعر الجماعي ${data.group_price} د.أ — التجمع يحتاج ${data.required_members} أشخاص.`;
+
+  document.getElementById("joinCard").classList.remove("hidden");
+  document.getElementById("joinCard").scrollIntoView({behavior:"smooth"});
+}
+
+
+async function loadGroupProgress(){
+  const gov = document.getElementById("governorate").value;
+  const box = document.getElementById("progressBox");
+  const text = document.getElementById("progressText");
+  const bar = document.getElementById("progressBar");
+  const hint = document.getElementById("progressHint");
+
+  if(!selectedProduct || !gov){
+    box.classList.add("hidden");
+    return;
+  }
+
+  const {data,error} = await db
+    .from("groups")
+    .select("current_members,required_members,status")
+    .eq("product_id", selectedProduct.id)
+    .eq("governorate", gov)
+    .eq("status","open")
+    .order("created_at",{ascending:false})
+    .limit(1)
+    .maybeSingle();
+
+  box.classList.remove("hidden");
+
+  if(error){
+    text.textContent = "تعذر تحميل حالة التجمع";
+    bar.style.width = "0%";
+    hint.textContent = "";
+    return;
+  }
+
+  const current = data?.current_members ?? 0;
+  const required = data?.required_members ?? selectedProduct.required_members;
+  const percent = Math.min(100, Math.round((current / required) * 100));
+
+  text.textContent = `تجمع ${gov}: ${current} / ${required}`;
+  bar.style.width = percent + "%";
+
+  if(current === 0){
+    hint.textContent = "أنت ممكن تكون أول شخص في هذا التجمع 🎯";
+  }else if(current < required){
+    hint.textContent = `باقي ${required-current} أشخاص حتى يكتمل التجمع`;
+  }else{
+    hint.textContent = "اكتمل التجمع 🎉";
+  }
+}
+
+async function joinGroup(){
+  const btn = document.getElementById("joinBtn");
+  const message = document.getElementById("message");
+  const name = document.getElementById("name").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const governorate = document.getElementById("governorate").value;
+  const city = document.getElementById("city").value.trim() || null;
+  const area = document.getElementById("area").value.trim() || null;
+
+  message.style.display = "none";
+
+  if(!selectedProduct || !name || !phone || !governorate){
+    showMsg("عبّي الاسم ورقم الهاتف والمحافظة.", false); return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "جاري الانضمام...";
+
+  const {data,error} = await db.rpc("join_group", {
+    p_product_id: selectedProduct.id,
+    p_name: name,
+    p_phone: phone,
+    p_governorate: governorate,
+    p_city: city,
+    p_area: area
+  });
+
+  if(error){
+    showMsg("صار خطأ أثناء الانضمام: " + error.message, false);
+  }else{
+    const r = Array.isArray(data) ? data[0] : data;
+    const current = r?.current_members ?? "?";
+    const required = r?.required_members ?? selectedProduct.required_members;
+    showMsg(`تم تسجيلك بنجاح 🎉<br>التجمع الآن: ${current} / ${required}<br>سيتم التواصل معك عند اكتمال التجمع.`, true);
+    btn.textContent = "تم الانضمام ✓";
+    await loadGroupProgress();
+  }
+
+  if(error){
+    btn.disabled = false;
+    btn.textContent = "انضم للتجمع";
+  }
+}
+
+function showMsg(text,ok){
+  const m = document.getElementById("message");
+  m.innerHTML = text;
+  m.className = "msg " + (ok ? "ok" : "err");
+  m.style.display = "block";
+}
+
+loadProducts();
+</script>
+</body>
+</html>
